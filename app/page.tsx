@@ -253,7 +253,7 @@ export default function DebtTracker() {
   }
 
   const getFilteredDebts = () => {
-    return debts.filter((debt) => {
+    const filtered = debts.filter((debt) => {
       const status = getPaymentStatus(debt)
       
       // ถ้าเปิด hidePaidDebts และหนี้นี้จ่ายครบแล้ว ให้ซ่อน
@@ -264,6 +264,29 @@ export default function DebtTracker() {
       // Filter ตามประเภทหนี้
       if (filter === "all") return true
       return status === filter
+    })
+
+    // เรียงลำดับตามวันครบกำหนด: ใกล้ครบกำหนดที่สุดแสดงก่อน
+    return filtered.sort((a, b) => {
+      const statusA = getPaymentStatus(a)
+      const statusB = getPaymentStatus(b)
+      
+      // หนี้ที่จ่ายครบแล้วให้อยู่ท้ายสุด
+      if (statusA === "paid" && statusB !== "paid") return 1
+      if (statusA !== "paid" && statusB === "paid") return -1
+      
+      // หนี้ที่เกินกำหนดให้อยู่ด้านบนสุด
+      const isOverdueA = isOverdue(a.dueDate) && (getRemainingPrincipal(a) + getRemainingInterest(a)) > 0
+      const isOverdueB = isOverdue(b.dueDate) && (getRemainingPrincipal(b) + getRemainingInterest(b)) > 0
+      
+      if (isOverdueA && !isOverdueB) return -1
+      if (!isOverdueA && isOverdueB) return 1
+      
+      // เรียงตามวันครบกำหนด (วันที่ใกล้ที่สุดก่อน)
+      const dateA = new Date(a.dueDate).getTime()
+      const dateB = new Date(b.dueDate).getTime()
+      
+      return dateA - dateB
     })
   }
 
@@ -613,6 +636,15 @@ export default function DebtTracker() {
 
         {/* Debts List */}
         <div className="space-y-4">
+          {filteredDebts.length > 0 && (
+            <div className="flex items-center gap-2 mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <Calendar className="h-4 w-4 text-blue-600" />
+              <span className="text-sm text-blue-800 font-medium">
+                📅 เรียงตามวันครบกำหนด: หนี้ที่ใกล้ครบกำหนดที่สุดแสดงก่อน
+              </span>
+            </div>
+          )}
+          
           {filteredDebts.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
@@ -659,7 +691,25 @@ export default function DebtTracker() {
                           {status === "paid" && <Badge className="bg-green-500">ชำระครบแล้ว</Badge>}
                           {status === "partial" && <Badge variant="secondary">ชำระบางส่วน</Badge>}
                         </CardTitle>
-                        <CardDescription className="text-xs sm:text-sm">วันที่ให้ยืม: {formatDate(debt.createdDate)}</CardDescription>
+                        <div className="flex flex-col gap-1">
+                          <CardDescription className="text-xs sm:text-sm">
+                            วันที่ให้ยืม: {formatDate(debt.createdDate)}
+                          </CardDescription>
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-3 w-3 text-muted-foreground" />
+                            <span className={`text-xs sm:text-sm font-medium ${
+                              isOverdue(debt.dueDate) && remainingTotal > 0 
+                                ? "text-red-600" 
+                                : remainingTotal === 0 
+                                ? "text-green-600" 
+                                : "text-orange-600"
+                            }`}>
+                              ครบกำหนด: {formatDate(debt.dueDate)}
+                              {isOverdue(debt.dueDate) && remainingTotal > 0 && " ⚠️"}
+                              {remainingTotal === 0 && " ✅"}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                       <div className="flex gap-1 sm:gap-2 flex-wrap">
                         {remainingTotal > 0 && (
