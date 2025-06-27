@@ -15,6 +15,8 @@ import {
   CheckCircle,
   AlertTriangle,
   Loader2,
+  Search,
+  X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -43,6 +45,7 @@ export default function DebtTracker() {
   const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null)
   const [filter, setFilter] = useState<FilterType>("all")
   const [hidePaidDebts, setHidePaidDebts] = useState(true) // Default = true เพื่อซ่อนหนี้ที่จ่ายครบแล้ว
+  const [searchQuery, setSearchQuery] = useState("") // ค้นหาตามชื่อผู้ยืม
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [formData, setFormData] = useState({
@@ -261,6 +264,14 @@ export default function DebtTracker() {
         return false
       }
       
+      // Filter ตามชื่อผู้ยืม
+      if (searchQuery.trim() !== "") {
+        const query = searchQuery.toLowerCase().trim()
+        if (!debt.borrowerName.toLowerCase().includes(query)) {
+          return false
+        }
+      }
+      
       // Filter ตามประเภทหนี้
       if (filter === "all") return true
       return status === filter
@@ -312,6 +323,12 @@ export default function DebtTracker() {
 
   const getTotalPaidInterest = () => {
     return debts.reduce((total, debt) => total + debt.paidInterest, 0)
+  }
+
+  // ดึงรายชื่อผู้ยืมทั้งหมด (ไม่ซ้ำ)
+  const getAllBorrowerNames = () => {
+    const names = debts.map(debt => debt.borrowerName)
+    return [...new Set(names)].sort()
   }
 
   const filteredDebts = getFilteredDebts()
@@ -377,14 +394,16 @@ export default function DebtTracker() {
         </div>
 
         {/* Controls */}
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4 sm:mb-6">
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="lg">
-                <Plus className="mr-2 h-4 w-4" />
-                เพิ่มหนี้ใหม่
-              </Button>
-            </DialogTrigger>
+        <div className="flex flex-col gap-4 mb-6">
+          {/* Top Row: Add Debt Button */}
+          <div className="flex justify-start">
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="lg">
+                  <Plus className="mr-2 h-4 w-4" />
+                  เพิ่มหนี้ใหม่
+                </Button>
+              </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle>เพิ่มหนี้ใหม่</DialogTitle>
@@ -463,8 +482,64 @@ export default function DebtTracker() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
+          
+          {/* Second Row: Search and Filters */}
+          <div className="flex flex-col lg:flex-row gap-3 lg:gap-4">
+            {/* Search Box */}
+            <div className="flex-1 max-w-md">
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="🔍 ค้นหาชื่อผู้ยืม..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 pr-10"
+                />
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-1 top-1 h-8 w-8 p-0 hover:bg-gray-100"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              {searchQuery && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  🔍 ค้นหา: "{searchQuery}" ({filteredDebts.length} รายการ)
+                </p>
+              )}
+            </div>
+            
+            {/* Quick Filter Buttons สำหรับชื่อผู้ยืม */}
+            {!searchQuery && getAllBorrowerNames().length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                <span className="text-sm text-muted-foreground self-center">ค้นหาด่วน:</span>
+                {getAllBorrowerNames().slice(0, 5).map((name) => (
+                  <Button
+                    key={name}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSearchQuery(name)}
+                    className="text-xs hover:bg-blue-50 hover:border-blue-300"
+                  >
+                    <User className="h-3 w-3 mr-1" />
+                    {name}
+                  </Button>
+                ))}
+                {getAllBorrowerNames().length > 5 && (
+                  <span className="text-xs text-muted-foreground self-center">
+                    +{getAllBorrowerNames().length - 5} คนอื่นๆ
+                  </span>
+                )}
+              </div>
+            )}
 
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4" />
               <Select value={filter} onValueChange={(value: FilterType) => setFilter(value)}>
@@ -500,6 +575,7 @@ export default function DebtTracker() {
                 </>
               )}
             </Button>
+            </div>
           </div>
         </div>
 
@@ -652,6 +728,8 @@ export default function DebtTracker() {
                 <h3 className="text-lg font-semibold mb-2">
                   {debts.length === 0 
                     ? "ยังไม่มีหนี้ในระบบ" 
+                    : searchQuery.trim() !== "" 
+                    ? `ไม่พบหนี้ของ "${searchQuery}"`
                     : hidePaidDebts && debts.every(debt => getPaymentStatus(debt) === "paid")
                     ? "หนี้ทั้งหมดจ่ายครบแล้ว"
                     : filter === "all" 
@@ -661,6 +739,8 @@ export default function DebtTracker() {
                 <p className="text-muted-foreground text-center">
                   {debts.length === 0 
                     ? "เริ่มต้นโดยการเพิ่มหนี้แรกของคุณ" 
+                    : searchQuery.trim() !== ""
+                    ? "ลองค้นหาชื่ออื่น หรือเคลียร์การค้นหาเพื่อดูทั้งหมด"
                     : hidePaidDebts && debts.every(debt => getPaymentStatus(debt) === "paid")
                     ? "🎉 ยินดีด้วย! หนี้ทั้งหมดชำระครบแล้ว คลิกปุ่มด้านบนเพื่อแสดงหนี้ที่จ่ายครบ"
                     : "ลองเปลี่ยน Filter หรือตั้งค่าการแสดงผล"}
